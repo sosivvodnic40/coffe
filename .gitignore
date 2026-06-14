@@ -1,9 +1,9 @@
 node_modules
 dist
 dist-server
-data
+/data
 .env
-data/test-cappuccino.db
+/data/test-cappuccino.db
 .DS_Store
 *.local
 extracted
