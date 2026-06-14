@@ -28,9 +28,34 @@ export const CONTACT = {
 export const NAV_LINKS = [
   { label: 'О нас', href: '#about' },
   { label: 'Меню', href: '#menu' },
+  { label: 'Акции', href: '#promotions' },
   { label: 'Галерея', href: '#gallery' },
   { label: 'Резервация', href: '#reservation' },
   { label: 'Контакты', href: '#contact' },
+];
+
+export const FALLBACK_PROMOTIONS = [
+  {
+    id: 1,
+    title: 'Завтрак всё включено',
+    description: 'Кофе + выпечка + яйца по специальной цене с 09:00 до 12:00 каждый день.',
+    discountLabel: '-15%',
+    validUntil: '2026-12-31',
+  },
+  {
+    id: 2,
+    title: 'Итальянский вечер',
+    description: 'Паста и пицца из нашего меню со скидкой по пятницам после 18:00.',
+    discountLabel: '-20%',
+    validUntil: '2026-09-30',
+  },
+  {
+    id: 3,
+    title: 'Сет для двоих',
+    description: 'Два основных блюда, десерт и напитки — идеально для романтического ужина.',
+    discountLabel: '5 900 ₸',
+    validUntil: '2026-08-31',
+  },
 ];
 
 export type MenuItem = { name: string; desc: string; price: string };
@@ -138,6 +163,7 @@ export const STATS: { icon: LucideIcon; value: string; label: string }[] = [
 ];
 
 export type ReservationForm = {
+  locationId: string;
   name: string;
   phone: string;
   date: string;
@@ -147,6 +173,7 @@ export type ReservationForm = {
 };
 
 export const INITIAL_FORM: ReservationForm = {
+  locationId: 'kabanbay',
   name: '',
   phone: '',
   date: '',

@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   ChevronDown,
   Clock,
@@ -10,10 +11,12 @@ import {
   Phone,
   X,
 } from 'lucide-react';
+import { api } from './api/client';
 import {
   ABOUT_IMAGE,
   COLORS,
   CONTACT,
+  FALLBACK_PROMOTIONS,
   GALLERY_IMAGES,
   HERO_IMAGE,
   INITIAL_FORM,
@@ -21,6 +24,7 @@ import {
   NAV_LINKS,
   ReservationForm,
   STATS,
+  type MenuCategory,
 } from './data/constants';
 
 export default function App() {
@@ -29,6 +33,22 @@ export default function App() {
   const [scrolled, setScrolled] = useState(false);
   const [form, setForm] = useState<ReservationForm>(INITIAL_FORM);
   const [submitted, setSubmitted] = useState(false);
+  const [confirmationCode, setConfirmationCode] = useState('');
+  const [menuCategories, setMenuCategories] = useState<MenuCategory[]>(MENU_CATEGORIES);
+  const [locations, setLocations] = useState(CONTACT.addresses.map((address, index) => ({
+    id: index === 0 ? 'kabanbay' : 'alfarabi',
+    label: address.label,
+    fullAddress: address.full,
+    phone: CONTACT.phones[index] ?? CONTACT.phones[0],
+  })));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [lookupCode, setLookupCode] = useState('');
+  const [lookupResult, setLookupResult] = useState<string | null>(null);
+  const [lookupError, setLookupError] = useState('');
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [menuLoading, setMenuLoading] = useState(true);
+  const [promotions, setPromotions] = useState(FALLBACK_PROMOTIONS);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
@@ -36,18 +56,90 @@ export default function App() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  useEffect(() => {
+    Promise.all([api.getMenu(), api.getLocations(), api.getPromotions()])
+      .then(([menuResponse, locationsResponse, promotionsResponse]) => {
+        setMenuCategories(
+          menuResponse.categories.map((category) => ({
+            id: category.id,
+            label: category.label,
+            items: category.items.map((item) => ({
+              name: item.name,
+              desc: item.description,
+              price: item.price,
+            })),
+          })),
+        );
+        setLocations(locationsResponse.locations);
+        setPromotions(promotionsResponse.promotions);
+      })
+      .catch(() => {
+        setMenuCategories(MENU_CATEGORIES);
+      })
+      .finally(() => setMenuLoading(false));
+  }, []);
+
   const scrollTo = (selector: string) => {
     setMobileOpen(false);
     document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    setSubmitted(true);
+    setIsSubmitting(true);
+    setSubmitError('');
+
+    try {
+      const response = await api.createReservation({
+        locationId: form.locationId,
+        name: form.name,
+        phone: form.phone,
+        date: form.date,
+        time: form.time,
+        guests: form.guests,
+        comment: form.comment,
+      });
+
+      setConfirmationCode(response.reservation.confirmationCode);
+      setSubmitted(true);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Не удалось создать бронь');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const activeItems =
-    MENU_CATEGORIES.find((category) => category.id === activeCategory)?.items ?? [];
+  const handleLookup = async (event: FormEvent) => {
+    event.preventDefault();
+    setLookupLoading(true);
+    setLookupError('');
+    setLookupResult(null);
+
+    try {
+      const response = await api.lookupReservation(lookupCode.trim());
+      const reservation = response.reservation;
+      const statusLabels: Record<string, string> = {
+        pending: 'Ожидает подтверждения',
+        confirmed: 'Подтверждена',
+        cancelled: 'Отменена',
+        completed: 'Завершена',
+      };
+      setLookupResult(
+        `${reservation.guestName}, ${reservation.reservationDate} ${reservation.reservationTime}, ` +
+          `${reservation.locationLabel}, ${reservation.guestsCount} гост(ей) — ` +
+          `${statusLabels[reservation.status] ?? reservation.status}`,
+      );
+    } catch (error) {
+      setLookupError(error instanceof Error ? error.message : 'Бронь не найдена');
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const activeItems = useMemo(
+    () => menuCategories.find((category) => category.id === activeCategory)?.items ?? [],
+    [menuCategories, activeCategory],
+  );
 
   return (
     <div
@@ -400,7 +492,7 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap justify-center gap-2 mb-12">
-            {MENU_CATEGORIES.map((category) => (
+            {menuCategories.map((category) => (
               <button
                 key={category.id}
                 type="button"
@@ -423,6 +515,11 @@ export default function App() {
             ))}
           </div>
 
+          {menuLoading ? (
+            <p className="text-center" style={{ color: COLORS.muted }}>
+              Загружаем меню...
+            </p>
+          ) : (
           <div className="grid md:grid-cols-2 gap-0">
             {activeItems.map((item, index) => (
               <div
@@ -470,10 +567,66 @@ export default function App() {
               </div>
             ))}
           </div>
+          )}
         </div>
       </section>
 
-      <section id="gallery" className="py-28 px-6" style={{ background: COLORS.bg }}>
+      <section id="promotions" className="py-28 px-6" style={{ background: COLORS.bg }}>
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <p
+              className="mb-4 tracking-widest uppercase"
+              style={{ color: COLORS.gold, fontSize: '10px', letterSpacing: '0.45em' }}
+            >
+              Акции
+            </p>
+            <h2
+              style={{
+                fontFamily: "'Playfair Display', serif",
+                fontSize: 'clamp(32px, 4.5vw, 52px)',
+                color: COLORS.cream,
+              }}
+            >
+              Специальные предложения
+            </h2>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            {promotions.map((promo) => (
+              <article
+                key={promo.id}
+                className="p-8 relative overflow-hidden"
+                style={{ background: COLORS.bgCard, border: `1px solid ${COLORS.border}` }}
+              >
+                <span
+                  className="inline-block mb-4 px-3 py-1 text-xs font-bold tracking-widest uppercase"
+                  style={{ background: COLORS.gold, color: COLORS.bg }}
+                >
+                  {promo.discountLabel}
+                </span>
+                <h3
+                  className="mb-3"
+                  style={{
+                    fontFamily: "'Playfair Display', serif",
+                    fontSize: '22px',
+                    color: COLORS.cream,
+                  }}
+                >
+                  {promo.title}
+                </h3>
+                <p className="mb-4" style={{ color: COLORS.muted, lineHeight: 1.8, fontSize: '14px' }}>
+                  {promo.description}
+                </p>
+                <p style={{ fontSize: '11px', color: COLORS.gold, letterSpacing: '0.15em' }}>
+                  Действует до {promo.validUntil}
+                </p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="gallery" className="py-28 px-6" style={{ background: COLORS.bgDark }}>
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <p
@@ -590,6 +743,21 @@ export default function App() {
                 <p className="mt-3" style={{ color: COLORS.muted, fontSize: '14px' }}>
                   Ваша заявка принята. Мы позвоним вам для подтверждения.
                 </p>
+                <p className="mt-4" style={{ color: COLORS.gold, fontSize: '14px', letterSpacing: '0.2em' }}>
+                  Код брони: {confirmationCode}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubmitted(false);
+                    setConfirmationCode('');
+                    setForm(INITIAL_FORM);
+                  }}
+                  className="mt-6 text-xs uppercase tracking-widest"
+                  style={{ color: COLORS.muted }}
+                >
+                  Новая бронь
+                </button>
               </div>
             ) : (
               <form
@@ -597,6 +765,38 @@ export default function App() {
                 className="space-y-4 p-8"
                 style={{ background: COLORS.bgCard, border: `1px solid ${COLORS.border}` }}
               >
+                <div>
+                  <label
+                    className="block mb-1"
+                    style={{
+                      fontSize: '10px',
+                      letterSpacing: '0.25em',
+                      color: COLORS.muted,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Локация
+                  </label>
+                  <select
+                    required
+                    value={form.locationId}
+                    onChange={(event) => setForm({ ...form, locationId: event.target.value })}
+                    className="w-full px-4 py-3 text-sm outline-none"
+                    style={{
+                      background: COLORS.bg,
+                      border: `1px solid ${COLORS.border}`,
+                      color: COLORS.cream,
+                      colorScheme: 'dark',
+                    }}
+                  >
+                    {locations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.fullAddress}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {[
                   { id: 'name', label: 'Ваше имя', type: 'text', placeholder: 'Иван Иванов' },
                   { id: 'phone', label: 'Телефон', type: 'tel', placeholder: '+7 (___) ___-__-__' },
@@ -692,15 +892,66 @@ export default function App() {
                   />
                 </div>
 
+                {submitError && (
+                  <p style={{ color: '#e57373', fontSize: '13px' }}>{submitError}</p>
+                )}
+
                 <button
                   type="submit"
-                  className="w-full py-4 text-xs font-bold tracking-widest uppercase transition-all duration-200 hover:opacity-90 mt-2"
+                  disabled={isSubmitting}
+                  className="w-full py-4 text-xs font-bold tracking-widest uppercase transition-all duration-200 hover:opacity-90 mt-2 disabled:opacity-60"
                   style={{ background: COLORS.gold, color: COLORS.bg, letterSpacing: '0.22em' }}
                 >
-                  Подтвердить резервацию
+                  {isSubmitting ? 'Отправляем...' : 'Подтвердить резервацию'}
                 </button>
               </form>
             )}
+
+            <form
+              onSubmit={handleLookup}
+              className="mt-4 space-y-3 p-6"
+              style={{ background: COLORS.bgCard, border: `1px solid ${COLORS.border}` }}
+            >
+              <p
+                style={{
+                  fontSize: '10px',
+                  letterSpacing: '0.25em',
+                  color: COLORS.muted,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Проверить бронь по коду
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={lookupCode}
+                  onChange={(event) => setLookupCode(event.target.value.toUpperCase())}
+                  placeholder="CP-XXXXXX"
+                  className="flex-1 px-4 py-3 text-sm outline-none"
+                  style={{
+                    background: COLORS.bg,
+                    border: `1px solid ${COLORS.border}`,
+                    color: COLORS.cream,
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={lookupLoading || !lookupCode.trim()}
+                  className="px-4 py-3 text-xs font-bold tracking-widest uppercase"
+                  style={{
+                    background: COLORS.gold,
+                    color: COLORS.bg,
+                    opacity: lookupLoading || !lookupCode.trim() ? 0.6 : 1,
+                  }}
+                >
+                  {lookupLoading ? '...' : 'Найти'}
+                </button>
+              </div>
+              {lookupResult && (
+                <p style={{ color: COLORS.cream, fontSize: '13px', lineHeight: 1.6 }}>{lookupResult}</p>
+              )}
+              {lookupError && <p style={{ color: '#e57373', fontSize: '13px' }}>{lookupError}</p>}
+            </form>
           </div>
         </div>
       </section>
@@ -766,7 +1017,7 @@ export default function App() {
                 Меню
               </h4>
               <ul className="space-y-3">
-                {MENU_CATEGORIES.map((category) => (
+                {menuCategories.map((category) => (
                   <li key={category.id}>
                     <button
                       type="button"
@@ -935,6 +1186,9 @@ export default function App() {
               © 2025 Cappuccino Кофейня. Все права защищены.
             </p>
             <p style={{ color: COLORS.muted, fontSize: '12px' }}>Астана, Казахстан</p>
+            <Link to="/admin" style={{ color: COLORS.muted, fontSize: '11px', opacity: 0.6 }}>
+              Админ-панель
+            </Link>
           </div>
         </div>
       </footer>
