@@ -1,10 +1,20 @@
 node_modules
 dist
+dist-server
+data
+.env
+data/test-cappuccino.db
 .DS_Store
 *.local
 extracted
-*.png
 scrape-*.mjs
 verify.mjs
 preview*.html
 preview*.json
+preview-root.html
+*.tsbuildinfo
+
+# Screenshots in project root — ignore; allow diploma folder
+*.png
+!diploma/08_Screenshots/
+!diploma/08_Screenshots/**
