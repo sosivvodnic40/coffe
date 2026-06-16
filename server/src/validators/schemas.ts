@@ -41,4 +41,26 @@ export const reservationLookupSchema = z.object({
   code: z.string().trim().min(6).max(12),
 });
 
+const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^(\+7|8)?[\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}$/, 'Некорректный номер телефона');
+
+export const registerSchema = z.object({
+  email: z.string().email('Некорректный email'),
+  password: z.string().min(6, 'Пароль должен содержать минимум 6 символов'),
+  fullName: z.string().trim().min(2, 'Имя должно содержать минимум 2 символа').max(80),
+  phone: phoneSchema,
+});
+
+export const userLoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+});
+
+export const updateProfileSchema = z.object({
+  fullName: z.string().trim().min(2).max(80).optional(),
+  phone: phoneSchema.optional(),
+});
+
 export type CreateReservationInput = z.infer<typeof createReservationSchema>;

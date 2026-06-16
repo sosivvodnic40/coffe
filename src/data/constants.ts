@@ -26,12 +26,13 @@ export const CONTACT = {
 };
 
 export const NAV_LINKS = [
-  { label: 'О нас', href: '#about' },
-  { label: 'Меню', href: '#menu' },
-  { label: 'Акции', href: '#promotions' },
-  { label: 'Галерея', href: '#gallery' },
-  { label: 'Резервация', href: '#reservation' },
-  { label: 'Контакты', href: '#contact' },
+  { label: 'Главная', href: '/' },
+  { label: 'О нас', href: '/about' },
+  { label: 'Меню', href: '/menu' },
+  { label: 'Акции', href: '/promotions' },
+  { label: 'Галерея', href: '/gallery' },
+  { label: 'Резервация', href: '/reservation' },
+  { label: 'Контакты', href: '/contact' },
 ];
 
 export const FALLBACK_PROMOTIONS = [

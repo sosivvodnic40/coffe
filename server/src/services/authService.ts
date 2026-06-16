@@ -31,8 +31,13 @@ export function verifyAdminToken(token: string): AdminTokenPayload {
     if (typeof payload === 'string') {
       throw new AppError(401, 'Недействительный токен авторизации');
     }
-    return payload as unknown as AdminTokenPayload;
-  } catch {
+    const data = payload as unknown as AdminTokenPayload;
+    if (data.role !== 'admin') {
+      throw new AppError(401, 'Недействительный токен авторизации');
+    }
+    return data;
+  } catch (error) {
+    if (error instanceof AppError) throw error;
     throw new AppError(401, 'Недействительный токен авторизации');
   }
 }

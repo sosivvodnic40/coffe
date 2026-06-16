@@ -143,4 +143,53 @@ describe('Cappuccino API', () => {
     expect(lookup.status).toBe(200);
     expect(lookup.body.reservation.confirmationCode).toBe(code);
   });
+
+  it('user register, login and profile flow works', async () => {
+    const register = await request(app).post('/api/auth/register').send({
+      email: 'guest@test.kz',
+      password: 'Test1234',
+      fullName: 'Guest User',
+      phone: '+77752188899',
+    });
+
+    expect(register.status).toBe(201);
+    expect(register.body.token).toBeTruthy();
+    expect(register.body.user.email).toBe('guest@test.kz');
+
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'guest@test.kz',
+      password: 'Test1234',
+    });
+
+    expect(login.status).toBe(200);
+    const token = login.body.token;
+
+    const profile = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(profile.status).toBe(200);
+    expect(profile.body.user.fullName).toBe('Guest User');
+
+    const reservation = await request(app)
+      .post('/api/reservations')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        locationId: 'kabanbay',
+        name: 'Guest User',
+        phone: '+77752188899',
+        date: '2026-12-25',
+        time: '18:00',
+        guests: '2',
+      });
+
+    expect(reservation.status).toBe(201);
+
+    const myReservations = await request(app)
+      .get('/api/auth/reservations')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(myReservations.status).toBe(200);
+    expect(myReservations.body.reservations.length).toBeGreaterThanOrEqual(1);
+  });
 });

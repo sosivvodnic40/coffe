@@ -4,7 +4,7 @@ import { AppError } from '../utils/errors.js';
 import type { AvailabilitySlot, DashboardStats, MenuCategory, Reservation } from '../types/index.js';
 import type { CreateReservationInput } from '../validators/schemas.js';
 
-type ReservationRow = {
+export type ReservationRow = {
   id: number;
   confirmation_code: string;
   location_id: string;
@@ -20,7 +20,7 @@ type ReservationRow = {
   updated_at: string;
 };
 
-function mapReservation(row: ReservationRow): Reservation {
+export function mapReservationFromRow(row: ReservationRow): Reservation {
   return {
     id: row.id,
     confirmationCode: row.confirmation_code,
@@ -182,7 +182,7 @@ export function getAvailability(
   });
 }
 
-export function createReservation(input: CreateReservationInput): Reservation {
+export function createReservation(input: CreateReservationInput, userId?: number): Reservation {
   const db = getDb();
   const guestsCount = parseGuestsCount(input.guests);
 
@@ -215,8 +215,8 @@ export function createReservation(input: CreateReservationInput): Reservation {
       `
       INSERT INTO reservations (
         confirmation_code, location_id, guest_name, guest_phone,
-        reservation_date, reservation_time, guests_count, comment
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        reservation_date, reservation_time, guests_count, comment, user_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     )
     .run(
@@ -228,6 +228,7 @@ export function createReservation(input: CreateReservationInput): Reservation {
       input.time,
       guestsCount,
       input.comment || null,
+      userId ?? null,
     );
 
   const row = db
@@ -244,7 +245,7 @@ export function createReservation(input: CreateReservationInput): Reservation {
     )
     .get(result.lastInsertRowid) as ReservationRow;
 
-  return mapReservation(row);
+  return mapReservationFromRow(row);
 }
 
 export function getReservationByCode(code: string): Reservation {
@@ -267,7 +268,7 @@ export function getReservationByCode(code: string): Reservation {
     throw new AppError(404, 'Бронь не найдена');
   }
 
-  return mapReservation(row);
+  return mapReservationFromRow(row);
 }
 
 export function listReservations(status?: Reservation['status']): Reservation[] {
@@ -295,7 +296,7 @@ export function listReservations(status?: Reservation['status']): Reservation[] 
     `;
 
   const rows = (status ? db.prepare(query).all(status) : db.prepare(query).all()) as ReservationRow[];
-  return rows.map(mapReservation);
+  return rows.map(mapReservationFromRow);
 }
 
 export function updateReservationStatus(id: number, status: Reservation['status']): Reservation {
@@ -325,7 +326,7 @@ export function updateReservationStatus(id: number, status: Reservation['status'
     )
     .get(id) as ReservationRow;
 
-  return mapReservation(row);
+  return mapReservationFromRow(row);
 }
 
 export function getDashboardStats(): DashboardStats {

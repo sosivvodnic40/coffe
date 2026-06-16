@@ -32,6 +32,16 @@ CREATE TABLE IF NOT EXISTS menu_items (
   FOREIGN KEY (category_id) REFERENCES menu_categories(id)
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS reservations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   confirmation_code TEXT NOT NULL UNIQUE,
@@ -43,9 +53,11 @@ CREATE TABLE IF NOT EXISTS reservations (
   guests_count INTEGER NOT NULL,
   comment TEXT,
   status TEXT NOT NULL DEFAULT 'pending',
+  user_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (location_id) REFERENCES locations(id)
+  FOREIGN KEY (location_id) REFERENCES locations(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS admin_users (
@@ -80,6 +92,7 @@ export function getDb(): Database.Database {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(schema);
+  migrateSchema(db);
 
   const categoryCount = db.prepare('SELECT COUNT(*) as count FROM menu_categories').get() as {
     count: number;
@@ -92,6 +105,17 @@ export function getDb(): Database.Database {
   }
 
   return db;
+}
+
+function migrateSchema(database: Database.Database): void {
+  const reservationColumns = database.prepare('PRAGMA table_info(reservations)').all() as {
+    name: string;
+  }[];
+  if (!reservationColumns.some((column) => column.name === 'user_id')) {
+    database.exec('ALTER TABLE reservations ADD COLUMN user_id INTEGER REFERENCES users(id)');
+  }
+  database.exec('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+  database.exec('CREATE INDEX IF NOT EXISTS idx_reservations_user_id ON reservations(user_id)');
 }
 
 function seedPromotionsIfEmpty(database: Database.Database): void {

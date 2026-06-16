@@ -88,6 +88,14 @@ export type DashboardStats = {
   menuItemsCount: number;
 };
 
+export type ApiUser = {
+  id: number;
+  email: string;
+  fullName: string;
+  phone: string;
+  createdAt: string;
+};
+
 export const api = {
   getMenu: () => request<{ categories: ApiMenuCategory[] }>('/menu'),
   getLocations: () => request<{ locations: ApiLocation[] }>('/locations'),
@@ -100,13 +108,38 @@ export const api = {
     });
     return request<{ slots: ApiAvailabilitySlot[] }>(`/reservations/availability?${query}`);
   },
-  createReservation: (payload: CreateReservationPayload) =>
+  createReservation: (payload: CreateReservationPayload, token?: string) =>
     request<{ message: string; reservation: ApiReservation }>('/reservations', {
       method: 'POST',
       body: JSON.stringify(payload),
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     }),
   lookupReservation: (code: string) =>
     request<{ reservation: ApiReservation }>(`/reservations/lookup/${encodeURIComponent(code)}`),
+  userRegister: (payload: { email: string; password: string; fullName: string; phone: string }) =>
+    request<{ token: string; user: ApiUser; expiresIn: string }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  userLogin: (email: string, password: string) =>
+    request<{ token: string; user: ApiUser; expiresIn: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+  getProfile: (token: string) =>
+    request<{ user: ApiUser }>('/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+  updateProfile: (token: string, payload: { fullName?: string; phone?: string }) =>
+    request<{ user: ApiUser }>('/auth/profile', {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    }),
+  getUserReservations: (token: string) =>
+    request<{ reservations: ApiReservation[] }>('/auth/reservations', {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
   adminLogin: (email: string, password: string) =>
     request<{ token: string; expiresIn: string }>('/admin/login', {
       method: 'POST',

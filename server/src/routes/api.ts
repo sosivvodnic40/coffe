@@ -12,13 +12,23 @@ import {
 import { authenticateAdmin } from '../services/authService.js';
 import { getPromotions } from '../services/promotionService.js';
 import {
+  getUserById,
+  getUserReservations,
+  loginUser,
+  registerUser,
+  updateUserProfile,
+} from '../services/userService.js';
+import {
   adminLoginSchema,
   availabilityQuerySchema,
   createReservationSchema,
+  registerSchema,
   reservationLookupSchema,
+  updateProfileSchema,
   updateReservationSchema,
+  userLoginSchema,
 } from '../validators/schemas.js';
-import { requireAdmin, validateBody, validateQuery } from '../middleware/index.js';
+import { optionalUser, requireAdmin, requireUser, validateBody, validateQuery } from '../middleware/index.js';
 import rateLimit from 'express-rate-limit';
 
 const reservationLimiter = rateLimit({
@@ -94,8 +104,8 @@ apiRouter.get('/reservations/availability', validateQuery(availabilityQuerySchem
   });
 });
 
-apiRouter.post('/reservations', reservationLimiter, validateBody(createReservationSchema), (req, res) => {
-  const reservation = createReservation(req.body);
+apiRouter.post('/reservations', reservationLimiter, optionalUser, validateBody(createReservationSchema), (req, res) => {
+  const reservation = createReservation(req.body, req.user?.sub);
   res.status(201).json({
     message: 'Бронь успешно создана',
     reservation,
@@ -110,6 +120,29 @@ apiRouter.get('/reservations/lookup/:code', (req, res) => {
   }
 
   res.json({ reservation: getReservationByCode(parsed.data.code) });
+});
+
+apiRouter.post('/auth/register', validateBody(registerSchema), (req, res) => {
+  const result = registerUser(req.body);
+  res.status(201).json({ token: result.token, user: result.user, expiresIn: '7d' });
+});
+
+apiRouter.post('/auth/login', validateBody(userLoginSchema), (req, res) => {
+  const result = loginUser(req.body.email, req.body.password);
+  res.json({ token: result.token, user: result.user, expiresIn: '7d' });
+});
+
+apiRouter.get('/auth/me', requireUser, (req, res) => {
+  res.json({ user: getUserById(req.user!.sub) });
+});
+
+apiRouter.patch('/auth/profile', requireUser, validateBody(updateProfileSchema), (req, res) => {
+  const user = updateUserProfile(req.user!.sub, req.body);
+  res.json({ user });
+});
+
+apiRouter.get('/auth/reservations', requireUser, (req, res) => {
+  res.json({ reservations: getUserReservations(req.user!.sub) });
 });
 
 apiRouter.post('/admin/login', validateBody(adminLoginSchema), (req, res) => {

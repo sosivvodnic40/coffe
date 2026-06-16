@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { ZodError, type ZodTypeAny } from 'zod';
 import { verifyAdminToken } from '../services/authService.js';
+import { verifyUserToken } from '../services/userService.js';
 import { AppError, isAppError } from '../utils/errors.js';
 
 export function validateBody<T extends ZodTypeAny>(schema: T) {
@@ -37,6 +38,30 @@ export function requireAdmin(req: Request, _res: Response, next: NextFunction): 
   next();
 }
 
+export function requireUser(req: Request, _res: Response, next: NextFunction): void {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) {
+    next(new AppError(401, 'Требуется авторизация'));
+    return;
+  }
+
+  const token = header.slice('Bearer '.length);
+  req.user = verifyUserToken(token);
+  next();
+}
+
+export function optionalUser(req: Request, _res: Response, next: NextFunction): void {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    try {
+      req.user = verifyUserToken(header.slice('Bearer '.length));
+    } catch {
+      // ignore invalid user token for public endpoints
+    }
+  }
+  next();
+}
+
 export function errorHandler(
   error: unknown,
   _req: Request,
@@ -70,6 +95,11 @@ declare global {
         sub: number;
         email: string;
         role: 'admin';
+      };
+      user?: {
+        sub: number;
+        email: string;
+        role: 'user';
       };
     }
   }
